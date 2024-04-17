@@ -49,52 +49,52 @@ class HtmlUp {
     return await port.first;
   }
 
-  Future<void> parseIf(
-    Element search,
-    Map<String, dynamic> data, {
-    String? itemKey,
-  }) async {
-    final elements = search.querySelectorAll('[${attr('if')}]');
+  // Future<void> parseIf(
+  //   Element search,
+  //   Map<String, dynamic> data, {
+  //   String? itemKey,
+  // }) async {
+  //   final elements = search.querySelectorAll('[${attr('if')}]');
 
-    for (final element in elements) {
-      final conditions = element.attributes[attr('if')]!;
+  //   for (final element in elements) {
+  //     final conditions = element.attributes[attr('if')]!;
 
-      element.attributes.remove(attr('if'));
+  //     element.attributes.remove(attr('if'));
 
-      final js2DartCondition = conditions.trim().split('||').map((ands) {
-        return ands.trim().split('&&').map((ors) {
-          final segments = ors.trim().split(' ');
+  //     final js2DartCondition = conditions.trim().split('||').map((ands) {
+  //       return ands.trim().split('&&').map((ors) {
+  //         final segments = ors.trim().split(' ');
 
-          if (segments.length == 3) {
-            var target = segments.first;
+  //         if (segments.length == 3) {
+  //           var target = segments.first;
 
-            if (itemKey != null && target.startsWith(itemKey)) {
-              target = target.substring(itemKey.length);
+  //           if (itemKey != null && target.startsWith(itemKey)) {
+  //             target = target.substring(itemKey.length);
 
-              if (target.startsWith('.')) {
-                target = target.substring(1);
-              }
-            }
+  //             if (target.startsWith('.')) {
+  //               target = target.substring(1);
+  //             }
+  //           }
 
-            var value = getValueFromJson(data, target);
+  //           var value = getValueFromJson(data, target);
 
-            segments[0] =
-                value == '' ? 'null' : "'${Uri.encodeFull('$value')}'";
-          }
+  //           segments[0] =
+  //               value == '' ? 'null' : "'${Uri.encodeFull('$value')}'";
+  //         }
 
-          return segments.join(' ');
-        }).join(' && ');
-      }).join(' || ');
+  //         return segments.join(' ');
+  //       }).join(' && ');
+  //     }).join(' || ');
 
-      final result = await runCondition(js2DartCondition, data);
+  //     final result = await runCondition(js2DartCondition, data);
 
-      if (!result) {
-        element.remove();
-      }
-    }
-  }
+  //     if (!result) {
+  //       element.remove();
+  //     }
+  //   }
+  // }
 
-  Future<void> parseForEach(Element search, Map<String, dynamic> data) async {
+  void parseForEach(Element search, Map<String, dynamic> data) {
     for (final foreach in search.querySelectorAll('[${attr('foreach')}]')) {
       final buffer = StringBuffer();
 
@@ -135,7 +135,7 @@ class HtmlUp {
           }),
         );
 
-        await parseIf(element, {...data, ...value}, itemKey: itemKey);
+        // await parseIf(element, {...data, ...value}, itemKey: itemKey);
 
         buffer.write(element.outerHtml);
       }
@@ -148,8 +148,8 @@ class HtmlUp {
   }
 
   Future<String> parse(Map<String, dynamic> data) async {
-    await parseForEach(document.documentElement!, data);
-    await parseIf(document.documentElement!, data);
+    parseForEach(document.documentElement!, data);
+    // await parseIf(document.documentElement!, data);
 
     return document.outerHtml.replaceAllMapped(
       _pattern,
