@@ -92,9 +92,11 @@ class HtmlUp with HtmlUpUtils {
     parseForEach(document.documentElement!, data);
     parseIf(document.documentElement!, data);
 
-    return document.outerHtml.replaceAllMapped(
-      _pattern,
-      (match) => getValueFromJson(data, match.group(1)!.trim()),
-    );
+    return document.outerHtml
+        .replaceAllMapped(
+          _pattern,
+          (match) => getValueFromJson(data, match.group(1)!.trim()),
+        )
+        .replaceAll(RegExp('<!--.*?-->'), '');
   }
 }
