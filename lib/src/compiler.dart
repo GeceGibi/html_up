@@ -1,36 +1,48 @@
+import 'dart:convert';
+
 import 'dart:io';
 import 'package:html/dom.dart';
-import 'package:html/parser.dart' as html_parser;
+import 'package:html/parser.dart' as parser;
 
 part 'if.dart';
 part 'utils.dart';
 
+typedef CompilerData = Map<String, dynamic>;
+
 class HtmlUp with HtmlUpUtils {
-  HtmlUp(this.htmlPath, {this.prefix = 'hu'});
+  HtmlUp(this.htmlPath, {this.prefix = 'hu', this.encoding = utf8})
+      : fileBytes = File(htmlPath).readAsBytesSync();
+
   final String htmlPath;
   final String prefix;
+  final Encoding encoding;
 
-  late final htmlFile = File(htmlPath);
-  late var document = html_parser.parse(htmlFile.readAsStringSync());
+  final List<int> fileBytes;
 
-  final _pattern = RegExp('{{(.*?)}}');
+  ///
+  var document = Document();
 
   String attr(String key) {
     return '$prefix-$key';
   }
 
   void compileIf(
-    Map<String, dynamic> data, {
+    CompilerData data, {
     String? itemKey,
     Element? element,
+    Map<String, dynamic> localData = const {},
   }) {
-    final elements = (element ?? document.documentElement!).querySelectorAll(
+    final elements = (element ?? document).querySelectorAll(
       '[${attr('if')}]',
     );
 
     for (final element in elements) {
       final jsCondition = element.attributes[attr('if')]!;
-      final parser = IfParser(jsCondition, data, itemKey: itemKey);
+      final parser = IfParser(
+        jsCondition,
+        {...data, ...localData},
+        itemKey: itemKey,
+      );
 
       element.attributes.remove(attr('if'));
 
@@ -40,14 +52,14 @@ class HtmlUp with HtmlUpUtils {
     }
   }
 
-  void compileForEach(Map<String, dynamic> data) {
-    for (final foreach
-        in document.documentElement!.querySelectorAll('[${attr('foreach')}]')) {
-      final buffer = StringBuffer();
-
+  void compileForEachAttributes(CompilerData data) {
+    for (final foreach in document.querySelectorAll('[${attr('foreach')}]')) {
       final dataKey = foreach.attributes[attr('foreach')];
       final itemKey = foreach.attributes[attr('item')];
       final indexKey = foreach.attributes[attr('index')];
+      final isClone = bool.parse(foreach.attributes[attr('clone')] ?? 'false');
+
+      final output = <Element>[];
 
       if (!data.containsKey(dataKey) && data[dataKey] is! Iterable) {
         return;
@@ -61,7 +73,8 @@ class HtmlUp with HtmlUpUtils {
         final value = data[dataKey][k];
 
         final element = Element.html(
-          foreach.innerHtml.replaceAllMapped(_pattern, (match) {
+          (isClone ? foreach.outerHtml : foreach.innerHtml)
+              .replaceAllMapped(_pattern, (match) {
             final valueLocation = match.group(1)!.trim();
 
             if (valueLocation.startsWith(itemKey)) {
@@ -82,14 +95,44 @@ class HtmlUp with HtmlUpUtils {
           }),
         );
 
-        compileIf({...data, ...value}, itemKey: itemKey, element: element);
-        buffer.write(element.outerHtml);
+        if (isClone) {
+          element.attributes.removeWhere(
+            (key, value) => key is String && key.startsWith(attr('')),
+          );
+        }
+
+        compileIf(
+          data,
+          itemKey: itemKey,
+          element: element,
+          localData: value is CompilerData ? value : {},
+        );
+
+        output.add(element);
       }
 
-      foreach.innerHtml = buffer.toString();
-      foreach.attributes.removeWhere(
-        (key, value) => key is String && key.startsWith(attr('')),
-      );
+      if (isClone) {
+        try {
+          final tempIndex = foreach.parent!.nodes.indexOf(foreach);
+
+          for (var i = 0; i < output.length; i++) {
+            foreach.parent!.nodes.insert(
+              tempIndex + (i + 1),
+              output[i],
+            );
+          }
+
+          foreach.remove();
+        } catch (e) {}
+      }
+
+      ///
+      else {
+        foreach.innerHtml = output.map((e) => e.outerHtml).join();
+        foreach.attributes.removeWhere(
+          (key, value) => key is String && key.startsWith(attr('')),
+        );
+      }
     }
   }
 
@@ -111,29 +154,51 @@ class HtmlUp with HtmlUpUtils {
     }
   }
 
-  void compileCommons(Map<String, dynamic> data, {bool preCompile = false}) {
-    document = Document.html(document.outerHtml.replaceAllMapped(
-      _pattern,
-      (match) {
-        final value = getValueFromJson(data, match.group(1)!.trim());
+  void compileCommons(CompilerData data, {bool preCompile = false}) {
+    document = Document.html(
+      document.outerHtml.replaceAllMapped(
+        _pattern,
+        (match) {
+          final value = getValueFromJson(data, match.group(1)!.trim());
 
-        if (preCompile && value == null) {
-          return match.group(0)!;
-        }
+          if (preCompile && value == null) {
+            return match.group(0)!;
+          }
 
-        return value ?? '';
-      },
-    ));
+          return value ?? '';
+        },
+      ),
+    );
   }
 
-  String compile(Map<String, dynamic> data) {
+  String compile(CompilerData data) {
+    final htmlParser = parser.HtmlParser(
+      encoding.decode(fileBytes),
+      encoding: encoding.name,
+      parseMeta: false,
+    );
+
+    final parsed = htmlParser.parse();
+
+    if (parsed.documentElement == null) {
+      return '';
+    }
+
+    document = parsed;
+
     compileCommons(data, preCompile: true);
     compileImports();
-    compileForEach(data);
+
+    /// Foreach
+    compileForEachAttributes(data);
+    // compileForEachElements(data);
+
     compileIf(data);
     compileCommons(data);
 
-    return document.outerHtml
-        .replaceAll(RegExp('<!--.*?-->', dotAll: true), '');
+    return document.outerHtml.replaceAll(
+      RegExp('<!--.*?-->', dotAll: true),
+      '',
+    );
   }
 }

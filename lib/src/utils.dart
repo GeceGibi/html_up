@@ -1,6 +1,8 @@
 part of 'compiler.dart';
 
 mixin class HtmlUpUtils {
+  final _pattern = RegExp('{{(.*?)}}');
+
   String? getValueFromJson<T>(T data, String path, {bool returnNull = false}) {
     if (data == null) {
       return null;

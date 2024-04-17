@@ -3,10 +3,12 @@ import 'dart:io';
 import 'package:html_up/html_up.dart';
 
 void main(List<String> args) {
-  final htmlUp = HtmlUp('./assets/home.html');
+  final htmlUp = HtmlUp('./assets/home.html', prefix: 'x');
 
   final compiled = htmlUp.compile(
     {
+      'lang': Platform.localeName,
+      'scripts': List.generate(10, (index) => 'script.$index.js'),
       'page': {
         'title': 'Working !',
         'header_source': './assets/header.html',
