@@ -1,9 +1,11 @@
 import 'dart:io';
-import 'dart:isolate';
 import 'package:html/dom.dart';
 import 'package:html/parser.dart' as html_parser;
 
-class HtmlUp {
+part 'if.dart';
+part 'utils.dart';
+
+class HtmlUp with HtmlUpUtils {
   HtmlUp(this.htmlPath, {this.prefix = 'hu'});
 
   final String htmlPath;
@@ -18,81 +20,20 @@ class HtmlUp {
     return '$prefix-$key';
   }
 
-  dynamic getValueFromJson(dynamic data, String path) {
-    if (data == null) {
-      return '';
-    }
+  void parseIf(Element search, Map<String, dynamic> data, {String? itemKey}) {
+    final elements = search.querySelectorAll('[${attr('if')}]');
 
-    if (path == r'$' || path.isEmpty) {
-      return data;
-    }
+    for (final element in elements) {
+      final jsCondition = element.attributes[attr('if')]!;
+      final parser = IfParser(jsCondition, data, itemKey: itemKey);
 
-    final segments = path.split('.');
-    final segment = segments.removeAt(0);
+      element.attributes.remove(attr('if'));
 
-    if (data is Map) {
-      return getValueFromJson(data[segment], segments.join('.'));
-    } else {
-      return getValueFromJson(data[int.parse(segment)], segments.join('.'));
+      if (!parser.runCondition()) {
+        element.remove();
+      }
     }
   }
-
-  Future<bool> runCondition(String condition, Map<String, dynamic> data) async {
-    final uri = Uri.dataFromString(
-      'import "dart:isolate";void main(_, SendPort port) {port.send($condition);}',
-      mimeType: 'application/dart',
-    );
-
-    final port = ReceivePort();
-    await Isolate.spawnUri(uri, [], port.sendPort, errorsAreFatal: false);
-
-    return await port.first;
-  }
-
-  // Future<void> parseIf(
-  //   Element search,
-  //   Map<String, dynamic> data, {
-  //   String? itemKey,
-  // }) async {
-  //   final elements = search.querySelectorAll('[${attr('if')}]');
-
-  //   for (final element in elements) {
-  //     final conditions = element.attributes[attr('if')]!;
-
-  //     element.attributes.remove(attr('if'));
-
-  //     final js2DartCondition = conditions.trim().split('||').map((ands) {
-  //       return ands.trim().split('&&').map((ors) {
-  //         final segments = ors.trim().split(' ');
-
-  //         if (segments.length == 3) {
-  //           var target = segments.first;
-
-  //           if (itemKey != null && target.startsWith(itemKey)) {
-  //             target = target.substring(itemKey.length);
-
-  //             if (target.startsWith('.')) {
-  //               target = target.substring(1);
-  //             }
-  //           }
-
-  //           var value = getValueFromJson(data, target);
-
-  //           segments[0] =
-  //               value == '' ? 'null' : "'${Uri.encodeFull('$value')}'";
-  //         }
-
-  //         return segments.join(' ');
-  //       }).join(' && ');
-  //     }).join(' || ');
-
-  //     final result = await runCondition(js2DartCondition, data);
-
-  //     if (!result) {
-  //       element.remove();
-  //     }
-  //   }
-  // }
 
   void parseForEach(Element search, Map<String, dynamic> data) {
     for (final foreach in search.querySelectorAll('[${attr('foreach')}]')) {
@@ -135,7 +76,7 @@ class HtmlUp {
           }),
         );
 
-        // await parseIf(element, {...data, ...value}, itemKey: itemKey);
+        parseIf(element, {...data, ...value}, itemKey: itemKey);
 
         buffer.write(element.outerHtml);
       }
@@ -149,7 +90,7 @@ class HtmlUp {
 
   Future<String> parse(Map<String, dynamic> data) async {
     parseForEach(document.documentElement!, data);
-    // await parseIf(document.documentElement!, data);
+    parseIf(document.documentElement!, data);
 
     return document.outerHtml.replaceAllMapped(
       _pattern,
