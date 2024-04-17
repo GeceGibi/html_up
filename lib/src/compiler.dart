@@ -7,12 +7,11 @@ part 'utils.dart';
 
 class HtmlUp with HtmlUpUtils {
   HtmlUp(this.htmlPath, {this.prefix = 'hu'});
-
   final String htmlPath;
   final String prefix;
 
   late final htmlFile = File(htmlPath);
-  late final document = html_parser.parse(htmlFile.readAsStringSync());
+  late var document = html_parser.parse(htmlFile.readAsStringSync());
 
   final _pattern = RegExp('{{(.*?)}}');
 
@@ -20,8 +19,14 @@ class HtmlUp with HtmlUpUtils {
     return '$prefix-$key';
   }
 
-  void parseIf(Element search, Map<String, dynamic> data, {String? itemKey}) {
-    final elements = search.querySelectorAll('[${attr('if')}]');
+  void compileIf(
+    Map<String, dynamic> data, {
+    String? itemKey,
+    Element? element,
+  }) {
+    final elements = (element ?? document.documentElement!).querySelectorAll(
+      '[${attr('if')}]',
+    );
 
     for (final element in elements) {
       final jsCondition = element.attributes[attr('if')]!;
@@ -35,8 +40,9 @@ class HtmlUp with HtmlUpUtils {
     }
   }
 
-  void parseForEach(Element search, Map<String, dynamic> data) {
-    for (final foreach in search.querySelectorAll('[${attr('foreach')}]')) {
+  void compileForEach(Map<String, dynamic> data) {
+    for (final foreach
+        in document.documentElement!.querySelectorAll('[${attr('foreach')}]')) {
       final buffer = StringBuffer();
 
       final dataKey = foreach.attributes[attr('foreach')];
@@ -65,7 +71,7 @@ class HtmlUp with HtmlUpUtils {
                 location = location.substring(1);
               }
 
-              return getValueFromJson(value, location);
+              return getValueFromJson(value, location) ?? '';
             }
 
             if (indexKey != null && valueLocation == indexKey) {
@@ -76,8 +82,7 @@ class HtmlUp with HtmlUpUtils {
           }),
         );
 
-        parseIf(element, {...data, ...value}, itemKey: itemKey);
-
+        compileIf({...data, ...value}, itemKey: itemKey, element: element);
         buffer.write(element.outerHtml);
       }
 
@@ -88,15 +93,47 @@ class HtmlUp with HtmlUpUtils {
     }
   }
 
-  Future<String> parse(Map<String, dynamic> data) async {
-    parseForEach(document.documentElement!, data);
-    parseIf(document.documentElement!, data);
+  void compileImports() {
+    for (final import in document.getElementsByTagName(attr('import'))) {
+      final source = import.attributes['source'];
+
+      if (source == null || source.isEmpty) {
+        continue;
+      }
+
+      try {
+        final content = File(source).readAsStringSync();
+        import.replaceWith(Element.html(content));
+      } catch (e) {
+        print(e);
+        continue;
+      }
+    }
+  }
+
+  void compileCommons(Map<String, dynamic> data, {bool preCompile = false}) {
+    document = Document.html(document.outerHtml.replaceAllMapped(
+      _pattern,
+      (match) {
+        final value = getValueFromJson(data, match.group(1)!.trim());
+
+        if (preCompile && value == null) {
+          return match.group(0)!;
+        }
+
+        return value ?? '';
+      },
+    ));
+  }
+
+  String compile(Map<String, dynamic> data) {
+    compileCommons(data, preCompile: true);
+    compileImports();
+    compileForEach(data);
+    compileIf(data);
+    compileCommons(data);
 
     return document.outerHtml
-        .replaceAllMapped(
-          _pattern,
-          (match) => getValueFromJson(data, match.group(1)!.trim()),
-        )
-        .replaceAll(RegExp('<!--.*?-->'), '');
+        .replaceAll(RegExp('<!--.*?-->', dotAll: true), '');
   }
 }

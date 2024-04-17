@@ -1,22 +1,22 @@
-part of 'parser.dart';
+part of 'compiler.dart';
 
 mixin class HtmlUpUtils {
-  dynamic getValueFromJson(dynamic data, String path) {
+  String? getValueFromJson<T>(T data, String path, {bool returnNull = false}) {
     if (data == null) {
-      return '';
+      return null;
     }
 
     if (path == r'$' || path.isEmpty) {
-      return data;
+      return '$data';
     }
 
     final segments = path.split('.');
     final segment = segments.removeAt(0);
 
-    if (data is Map) {
-      return getValueFromJson(data[segment], segments.join('.'));
-    } else {
-      return getValueFromJson(data[int.parse(segment)], segments.join('.'));
-    }
+    return switch (data) {
+      Map _ => getValueFromJson(data[segment], segments.join('.')),
+      List _ => getValueFromJson(data[int.parse(segment)], segments.join('.')),
+      _ => '',
+    };
   }
 }

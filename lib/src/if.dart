@@ -1,4 +1,4 @@
-part of 'parser.dart';
+part of 'compiler.dart';
 
 class IfParser with HtmlUpUtils {
   IfParser(this.jsCondition, this.data, {this.itemKey});
@@ -6,27 +6,38 @@ class IfParser with HtmlUpUtils {
   final Map<String, dynamic> data;
   final String? itemKey;
 
-  bool runCondition() {
-    var ors = jsCondition.trim().split('||');
+  Iterable<String> _clean(List<String> segments) {
+    return segments.map((e) => e.trim().replaceAll(RegExp(r'\s\s+'), ' '));
+  }
 
-    return ors.map((ands) {
-      final andsResult = ands.trim().split('&&').map((ors) {
-        final segments = ors.trim().split(' ');
+  bool runCondition() {
+    final result = _clean(jsCondition.trim().split('||')).map((ands) {
+      final andsResult = _clean(ands.split('&&')).map((ors) {
+        final segments = ors.split(' ');
 
         if (segments.length == 3) {
-          var target = segments.first;
+          final parsedLeft = _parseArgument(segments.first);
 
-          if (itemKey != null && target.startsWith(itemKey!)) {
-            target = target.substring(itemKey!.length);
-
-            if (target.startsWith('.')) {
-              target = target.substring(1);
-            }
+          if (parsedLeft != segments.first) {
+            segments[0] = parsedLeft.toString();
           }
 
-          var value = getValueFromJson(data, target);
+          ///
+          else {
+            var target = segments.first;
 
-          segments[0] = value == '' ? 'null' : "'${Uri.encodeFull('$value')}'";
+            if (itemKey != null && target.startsWith(itemKey!)) {
+              target = target.substring(itemKey!.length);
+
+              if (target.startsWith('.')) {
+                target = target.substring(1);
+              }
+            }
+
+            var value = getValueFromJson(data, target, returnNull: true);
+
+            segments[0] = value == null ? 'null' : '"$value"';
+          }
         }
 
         return _runConditionSegments(segments);
@@ -34,24 +45,35 @@ class IfParser with HtmlUpUtils {
 
       return !andsResult.contains(false);
     }).contains(true);
+
+    return result;
   }
 
   dynamic _parseArgument(String arg) {
     final stringPattern = RegExp('^[\'"](.*)[\'"]\$');
+    final intPattern = RegExp(r'^[\d,.-]+$');
 
-    if (stringPattern.hasMatch(arg)) {
-      return stringPattern.firstMatch(arg)!.group(1)!;
-    }
-
-    ///
-    else if (arg == 'null') {
+    if (arg == 'null') {
       return null;
     }
 
-    try {
+    /// String
+    else if (stringPattern.hasMatch(arg)) {
+      return stringPattern.firstMatch(arg)!.group(1)!;
+    }
+
+    /// num
+    else if (intPattern.hasMatch(arg)) {
       return num.parse(arg);
-    } catch (e) {
-      // no-op
+    }
+
+    ///
+    else if (arg case 'true' || 'false') {
+      try {
+        return bool.parse(arg);
+      } catch (e) {
+        // no-op
+      }
     }
 
     return arg;
@@ -60,7 +82,11 @@ class IfParser with HtmlUpUtils {
   bool _runConditionSegments(List<String> segments) {
     if (segments.length == 1) {
       return bool.tryParse(segments.first) ?? false;
-    } else if (segments.length == 3) {
+    }
+
+    ///
+    else if (segments.length == 3) {
+      ///
       final operator = segments[1];
 
       return switch (operator) {

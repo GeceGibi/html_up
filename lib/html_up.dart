@@ -1,3 +1,3 @@
 library;
 
-export 'src/parser.dart' show HtmlUp;
+export 'src/compiler.dart' show HtmlUp;
