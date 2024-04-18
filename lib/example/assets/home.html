@@ -1,31 +1,5 @@
 <!DOCTYPE html>
 <html lang="{{ lang }}">
-
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ page.title }}</title>
-
-    <script x-foreach="scripts" x-item="script" x-clone="true" src="{{ script }}" type="javascript"></script>
-</head>
-
-<body>
-    <x-import source="{{ page.header_source }}"></x-import>
-
-    <ul x-foreach="items" x-item="item" x-index="index">
-        <li>
-            <img x-if="item.image != null && item.image != ''" src="{{ item.image }}" width="40" />
-            <a href="{{ item.uri }}">{{ item.title }}</a>
-        </li>
-    </ul>
-
-    <h1 x-if="true && true == true">render this</h1>
-
-    <div x-if="false != false">but not this</div>
-    <div x-if="1 > 0 || 1 == 2">1 > 0</div>
-    <div x-if="1 > 1">1 > 1</div>
-
-    <x-import source="./assets/footer.html"></x-import>
-</body>
-
+<x-import source="./assets/head.html" />
+<x-import source="./assets/body.html" />
 </html>

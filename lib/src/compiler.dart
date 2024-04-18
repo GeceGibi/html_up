@@ -1,6 +1,9 @@
+// ignore_for_file: implementation_imports
+
 import 'dart:convert';
 
 import 'dart:io';
+
 import 'package:html/dom.dart';
 import 'package:html/parser.dart' as parser;
 
@@ -10,7 +13,7 @@ part 'utils.dart';
 typedef CompilerData = Map<String, dynamic>;
 
 class HtmlUp with HtmlUpUtils {
-  HtmlUp(this.htmlPath, {this.prefix = 'hu', this.encoding = utf8})
+  HtmlUp(this.htmlPath, {this.prefix = 'up', this.encoding = utf8})
       : fileBytes = File(htmlPath).readAsBytesSync();
 
   final String htmlPath;
@@ -57,7 +60,7 @@ class HtmlUp with HtmlUpUtils {
       final dataKey = foreach.attributes[attr('foreach')];
       final itemKey = foreach.attributes[attr('item')];
       final indexKey = foreach.attributes[attr('index')];
-      final isClone = bool.parse(foreach.attributes[attr('clone')] ?? 'false');
+      final isClone = foreach.attributes.containsKey(attr('clone'));
 
       final output = <Element>[];
 
@@ -136,65 +139,85 @@ class HtmlUp with HtmlUpUtils {
     }
   }
 
-  void compileImports() {
-    for (final import in document.getElementsByTagName(attr('import'))) {
-      final source = import.attributes['source'];
+  String _collectHtml(
+    String content,
+    String Function(String newContent) onEachLoad,
+  ) {
+    final pattern = RegExp(
+      '<${attr('import')}.*?source=["\'](.*)["\'].*?\/>',
+    );
 
-      if (source == null || source.isEmpty) {
-        continue;
+    if (!pattern.hasMatch(content)) {
+      return content;
+    }
+
+    content = content.replaceAllMapped(pattern, (match) {
+      final source = match.group(1)!;
+
+      if (source.isEmpty) {
+        return '';
       }
 
       try {
-        final content = File(source).readAsStringSync();
-        import.replaceWith(Element.html(content));
+        return File(source).readAsStringSync();
+      } on PathNotFoundException catch (e) {
+        return '${e.osError?.message ?? e.message} ${e.path}';
       } catch (e) {
-        print(e);
-        continue;
+        return '$e';
       }
-    }
+    });
+
+    return _collectHtml(onEachLoad(content), onEachLoad);
   }
 
-  void compileCommons(CompilerData data, {bool preCompile = false}) {
-    document = Document.html(
-      document.outerHtml.replaceAllMapped(
-        _pattern,
-        (match) {
-          final value = getValueFromJson(data, match.group(1)!.trim());
+  String collectHtml(CompilerData data) {
+    final content = encoding.decode(fileBytes);
 
-          if (preCompile && value == null) {
-            return match.group(0)!;
-          }
+    return _collectHtml(content, (newContent) {
+      return compileCommons(newContent, data, preCompile: true);
+    });
+  }
 
-          return value ?? '';
-        },
-      ),
+  String compileCommons(
+    String rawHtml,
+    CompilerData data, {
+    bool preCompile = false,
+  }) {
+    return rawHtml.replaceAllMapped(
+      _pattern,
+      (match) {
+        final value = getValueFromJson(data, match.group(1)!.trim());
+
+        if (preCompile && value == null) {
+          return match.group(0)!;
+        }
+
+        return value ?? '';
+      },
     );
   }
 
   String compile(CompilerData data) {
+    final rawHtml = collectHtml(data);
+
     final htmlParser = parser.HtmlParser(
-      encoding.decode(fileBytes),
+      rawHtml,
       encoding: encoding.name,
       parseMeta: false,
+      lowercaseAttrName: true,
+      lowercaseElementName: true,
     );
 
-    final parsed = htmlParser.parse();
-
-    if (parsed.documentElement == null) {
-      return '';
-    }
-
-    document = parsed;
-
-    compileCommons(data, preCompile: true);
-    compileImports();
+    htmlParser.compatMode = 'quirks';
+    document = htmlParser.parse();
 
     /// Foreach
     compileForEachAttributes(data);
-    // compileForEachElements(data);
-
     compileIf(data);
-    compileCommons(data);
+
+    document = Document.html(
+      compileCommons(document.outerHtml, data),
+    );
 
     return document.outerHtml.replaceAll(
       RegExp('<!--.*?-->', dotAll: true),

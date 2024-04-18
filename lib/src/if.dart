@@ -2,6 +2,7 @@ part of 'compiler.dart';
 
 class IfParser with HtmlUpUtils {
   IfParser(this.jsCondition, this.data, {this.itemKey});
+
   final String jsCondition;
   final Map<String, dynamic> data;
   final String? itemKey;
