@@ -15,14 +15,14 @@ void main(List<String> args) {
     'pool': [
       1,
       {'name': 'Hi'},
-      5
+      5,
     ],
     'items': [
       {'title': 'item one', 'image': ''},
       {'title': 'item one', 'image': null},
       {
         'title': 'item one',
-        'image': 'https://th.wallhaven.cc/lg/3l/3lepy9.jpg'
+        'image': 'https://th.wallhaven.cc/lg/3l/3lepy9.jpg',
       },
     ],
   });

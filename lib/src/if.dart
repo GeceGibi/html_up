@@ -35,7 +35,11 @@ class IfParser with HtmlUpUtils {
               }
             }
 
-            var value = getValueFromJson(data, target, returnNull: true);
+            final value = getValueFromJson(
+              data,
+              target,
+              returnNull: true,
+            );
 
             segments[0] = value == null ? 'null' : '"$value"';
           }
@@ -50,7 +54,7 @@ class IfParser with HtmlUpUtils {
     return result;
   }
 
-  dynamic _parseArgument(String arg) {
+  Object? _parseArgument(String arg) {
     final stringPattern = RegExp('^[\'"](.*)[\'"]\$');
     final intPattern = RegExp(r'^[\d,.-]+$');
 
@@ -89,14 +93,16 @@ class IfParser with HtmlUpUtils {
     else if (segments.length == 3) {
       ///
       final operator = segments[1];
+      final left = _parseArgument(segments.first);
+      final right = _parseArgument(segments.last);
 
       return switch (operator) {
-        '==' => _parseArgument(segments.first) == _parseArgument(segments.last),
-        '!=' => _parseArgument(segments.first) != _parseArgument(segments.last),
-        '>' => _parseArgument(segments.first) > _parseArgument(segments.last),
-        '>=' => _parseArgument(segments.first) >= _parseArgument(segments.last),
-        '<' => _parseArgument(segments.first) < _parseArgument(segments.last),
-        '<=' => _parseArgument(segments.first) <= _parseArgument(segments.last),
+        '==' => left == right,
+        '!=' => left != right,
+        '>' when left is num && right is num => left > right,
+        '>=' when left is num && right is num => left >= right,
+        '<' when left is num && right is num => left < right,
+        '<=' when left is num && right is num => left <= right,
         _ => false,
       };
     }

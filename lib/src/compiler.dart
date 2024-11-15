@@ -72,7 +72,7 @@ class HtmlUp with HtmlUpUtils {
         return;
       }
 
-      for (var k = 0; k < data[dataKey].length; k++) {
+      for (var k = 0; k < (data[dataKey] as Iterable).length; k++) {
         final value = data[dataKey][k];
 
         final element = Element.html(
@@ -126,7 +126,9 @@ class HtmlUp with HtmlUpUtils {
           }
 
           foreach.remove();
-        } catch (e) {}
+        } catch (e) {
+          /// no-op
+        }
       }
 
       ///
@@ -206,9 +208,8 @@ class HtmlUp with HtmlUpUtils {
       parseMeta: false,
       lowercaseAttrName: true,
       lowercaseElementName: true,
-    );
+    )..compatMode = 'quirks';
 
-    htmlParser.compatMode = 'quirks';
     document = htmlParser.parse();
 
     /// Foreach
